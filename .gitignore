@@ -1,0 +1,57 @@
+# ── Données (trop volumineuses pour GitHub) ───────────────────────────────
+data/mvtec3d/
+data/*.tar.xz
+data/*.tar
+data/*.zip
+*.tiff
+*.tif
+
+# ── Modèles entraînés ─────────────────────────────────────────────────────
+*.pth
+*.pt
+*.ckpt
+models/checkpoints/
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# ── Environnements virtuels ───────────────────────────────────────────────
+venv/
+env/
+.env
+.venv/
+ENV/
+
+# ── Jupyter / Colab ───────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── Résultats temporaires ─────────────────────────────────────────────────
+results/tmp/
+*.log
+*.tmp
+
+# ── OS ────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ───────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Google Drive / Colab ──────────────────────────────────────────────────
+.config/
+drive/
