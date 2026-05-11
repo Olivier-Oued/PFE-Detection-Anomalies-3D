@@ -135,7 +135,7 @@ PFE-Detection-Anomalies-3D/
 |-------|-------------|----------------|--------|
 | **Phase 1** | Exploration du dataset | 540 854 pts/pièce · 4 types défauts | ✅ |
 | **Phase 2** | Prétraitement & DataLoaders | Tenseur (16,2048,3) · 0 NaN/Inf | ✅ |
-| **Phase 3** | Autoencodeur PointNet | — | ⏳ |
+||**Phase 3** | Modélisation BTF RGB+Depth | AUC=0.9664 · F1=0.9609 · Précision=0.9451 | ✅ |
 | **Phase 4** | Évaluation AUC · F1 · IoU | — | 🔜 |
 | **Phase 5** | Déploiement & démo finale | — | 🔜 |
 
