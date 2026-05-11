@@ -7,10 +7,11 @@
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org)
+[![ResNet18](https://img.shields.io/badge/ResNet18-ImageNet-orange)](https://pytorch.org/vision/stable/models.html)
 [![Open3D](https://img.shields.io/badge/Open3D-0.18-green)](http://www.open3d.org)
 [![Colab](https://img.shields.io/badge/Google%20Colab-GPU%20T4-F9AB00?logo=googlecolab&logoColor=white)](https://colab.research.google.com)
 [![MVTec 3D-AD](https://img.shields.io/badge/Dataset-MVTec%203D--AD-blue)](https://www.mvtec.com/company/research/datasets/mvtec-3d-ad)
-[![Status](https://img.shields.io/badge/Statut-En%20cours-orange)]()
+[![Status](https://img.shields.io/badge/Statut-Phase%204%20en%20cours-orange)]()
 [![License](https://img.shields.io/badge/Licence-MIT-green)](LICENSE)
 
 ---
@@ -30,47 +31,57 @@
 
 ## 📋 Résumé du projet
 
-Dans un contexte de **contrôle qualité industriel automatisé**, ce projet développe un système de détection d'anomalies sur des objets 3D à partir de nuages de points. Le système apprend la géométrie normale d'une pièce industrielle et détecte automatiquement toute déviation anormale — sans avoir jamais vu de défaut pendant l'entraînement.
+Dans un contexte de **contrôle qualité industriel automatisé**, ce projet développe un système de détection d'anomalies sur des objets 3D à partir de données RGB et de profondeur. Le système apprend la distribution normale d'une pièce industrielle et détecte automatiquement toute déviation anormale — sans avoir jamais vu de défaut pendant l'entraînement (**apprentissage non supervisé**).
 
 ### Problématique
 
-> Comment détecter automatiquement des défauts structurels (fissures, trous, contaminations) sur des pièces industrielles 3D à partir de leurs données géométriques, en utilisant uniquement des exemples de pièces normales pour l'entraînement ?
-
-### Approche retenue
-
-- **Apprentissage non supervisé** : le modèle apprend uniquement sur des pièces normales
-- **Architecture** : Autoencodeur basé sur PointNet (encoder + decoder)
-- **Score d'anomalie** : Chamfer Distance entre pièce originale et reconstruction
-- **Localisation** : carte d'erreur point à point pour localiser précisément les défauts
+> Comment détecter automatiquement des défauts structurels (fissures, trous, contaminations) sur des pièces industrielles 3D à partir de leurs données RGB et géométriques, en utilisant uniquement des exemples de pièces normales pour l'entraînement ?
 
 ---
 
-## 🏗️ Architecture du système
+## 🏗️ Architecture retenue — BTF (Back to Feature)
+
+Après comparaison de plusieurs approches, l'approche **BTF (Back to Feature)** a été retenue :
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    PIPELINE COMPLET                         │
+│                    PIPELINE BTF                             │
 │                                                             │
-│  Fichier .tiff (H×W×3)                                      │
+│  Image RGB (.png)          Carte Depth Z (.tiff)            │
+│       │                          │                          │
+│  ┌────▼──────────────────────────▼────┐                     │
+│  │   ResNet18 pré-entraîné ImageNet   │                     │
+│  │   Layer1 (64ch) · Layer2 (128ch)   │                     │
+│  │   Layer3 (256ch) — poids figés     │                     │
+│  └────┬──────────────────────────┬────┘                     │
+│       │  Features RGB            │  Features Depth          │
+│  ┌────▼──────────────────────────▼────┐                     │
+│  │   Fusion multi-échelle (896 dim)   │                     │
+│  │   PCA → 128 dimensions             │                     │
+│  └────┬───────────────────────────────┘                     │
 │       │                                                     │
-│  ┌────▼──────────────┐                                      │
-│  │   PRÉTRAITEMENT   │  normalisation · 2048 pts · augment  │
-│  └────┬──────────────┘                                      │
-│       │  Tenseur (B, 2048, 3)                               │
-│  ┌────▼──────────────┐                                      │
-│  │     ENCODER       │  Conv1D : 3→64→128→256               │
-│  │   (PointNet)      │  MaxPool global → z ∈ ℝ¹²⁸          │
-│  └────┬──────────────┘                                      │
-│  ┌────▼──────────────┐                                      │
-│  │     DECODER       │  MLP : 128→256→512→1024→N×3         │
-│  └────┬──────────────┘                                      │
 │  ┌────▼──────────────────────────────┐                      │
-│  │  SCORE D'ANOMALIE                 │                      │
-│  │  Chamfer Distance(orig, recon)    │                      │
-│  │  Score élevé → pièce défectueuse  │                      │
+│  │  KNN cosine (k=9)                 │                      │
+│  │  Banque de 244 pièces normales    │                      │
+│  └────┬──────────────────────────────┘                      │
+│       │                                                     │
+│  ┌────▼──────────────────────────────┐                      │
+│  │  Score = max distance locale      │                      │
+│  │  Score > seuil → DÉFAUT détecté   │                      │
 │  └───────────────────────────────────┘                      │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Pourquoi BTF ?
+
+| Approche testée | AUC | Statut |
+|---|---|---|
+| Autoencodeur Chamfer Distance | 0.657 | Abandonné |
+| PatchCore XYZ-only | 0.468 | Abandonné |
+| Fusion RGB+XYZ globale | 0.662 | Abandonné |
+| **BTF RGB + Depth (retenu)** | **0.9514** | ✅ Retenu |
+
+La géométrie 3D seule ne suffit pas pour les défauts fins (fissures de 0.1mm). La modalité RGB apporte l'information de texture indispensable.
 
 ---
 
@@ -78,16 +89,16 @@ Dans un contexte de **contrôle qualité industriel automatisé**, ce projet dé
 
 | Split | Échantillons | Composition |
 |-------|-------------|-------------|
-| `train/` | **244** | 100% normaux |
-| `validation/` | **22** | 100% normaux |
+| `train/` | **244** | 100% normaux — apprentissage non supervisé |
+| `validation/` | **22** | 100% normaux — calibration du seuil |
 | `test/` | **110** | 20% normaux · 80% défectueux |
 
-| Défaut | Description | Échantillons |
-|--------|-------------|-------------|
-| `crack` | Fissures nettes en surface | 22 |
-| `hole` | Trous anormaux dans la structure | 21 |
-| `contamination` | Dépôts ou corps étrangers | 22 |
-| `combined` | Plusieurs défauts simultanés | 23 |
+| Défaut | Description | Échantillons | AUC spécifique |
+|--------|-------------|-------------|----------------|
+| `crack` | Fissures nettes en surface | 22 | 0.9917 |
+| `hole` | Trous anormaux dans la structure | 21 | 0.9459 |
+| `contamination` | Dépôts ou corps étrangers | 22 | 0.9360 |
+| `combined` | Plusieurs défauts simultanés | 23 | 0.9901 |
 
 > ⚠️ Le dataset n'est pas inclus dans ce dépôt (14.2 GB).  
 > Téléchargement : https://www.mvtec.com/company/research/datasets/mvtec-3d-ad
@@ -102,8 +113,8 @@ PFE-Detection-Anomalies-3D/
 ├── 📓 notebooks/
 │   ├── Phase1_Exploration_MVTec3D.ipynb       ✅ Terminé
 │   ├── Phase2_Pretraitement_MVTec3D.ipynb     ✅ Terminé
-│   ├── Phase3_Modelisation_MVTec3D.ipynb      ⏳ En cours
-│   └── Phase4_Evaluation_MVTec3D.ipynb        🔜 À venir
+│   ├── Phase3_Modelisation_MVTec3D.ipynb      ✅ Terminé
+│   └── Phase4_Evaluation_MVTec3D.ipynb        ⏳ En cours
 │
 ├── 🐍 src/
 │   ├── preprocessing/
@@ -111,7 +122,7 @@ PFE-Detection-Anomalies-3D/
 │   │   ├── normalize.py    # Normalisation + augmentation
 │   │   └── dataset.py      # BagelDataset + DataLoaders
 │   ├── models/
-│   │   └── autoencoder.py  # PointNet Encoder + Decoder
+│   │   └── autoencoder.py  # PointNet Encoder + Decoder (v1)
 │   ├── evaluation/
 │   │   ├── metrics.py      # AUC · F1 · IoU · PRO-score
 │   │   └── visualize.py    # Cartes d'anomalie
@@ -129,15 +140,41 @@ PFE-Detection-Anomalies-3D/
 
 ---
 
-## 🚀 Avancement
+## 🚀 Avancement du projet
 
 | Phase | Description | Résultats clés | Statut |
 |-------|-------------|----------------|--------|
-| **Phase 1** | Exploration du dataset | 540 854 pts/pièce · 4 types défauts | ✅ |
-| **Phase 2** | Prétraitement & DataLoaders | Tenseur (16,2048,3) · 0 NaN/Inf | ✅ |
-||**Phase 3** | Modélisation BTF RGB+Depth | AUC=0.9664 · F1=0.9609 · Précision=0.9451 | ✅ |
-| **Phase 4** | Évaluation AUC · F1 · IoU | — | 🔜 |
-| **Phase 5** | Déploiement & démo finale | — | 🔜 |
+| **Phase 1** | Exploration du dataset MVTec 3D-AD | 540 854 pts/pièce · 4 types défauts | ✅ Terminée |
+| **Phase 2** | Prétraitement & DataLoaders PyTorch | Tenseur (16,2048,3) · 0 NaN/Inf | ✅ Terminée |
+| **Phase 3** | Modélisation BTF RGB+Depth | AUC=0.9514 · F1=0.9392 · Précision=0.9140 · Rappel=0.9659 | ✅ Terminée |
+| **Phase 4** | Évaluation · IoU · cartes d'anomalie | — | ⏳ En cours |
+| **Phase 5** | Déploiement & démonstration finale | — | 🔜 À venir |
+
+---
+
+## 📈 Résultats Phase 3 — BTF RGB+Depth
+
+### Métriques globales
+
+| Métrique | Objectif | Résultat | |
+|----------|----------|----------|---|
+| **AUC-ROC** | > 0.85 | **0.9514** | ✅ |
+| **F1-Score** | > 0.80 | **0.9392** | ✅ |
+| **Précision** | > 0.80 | **0.9140** | ✅ |
+| **Rappel** | > 0.80 | **0.9659** | ✅ |
+
+### Matrice de confusion (test — 110 pièces)
+
+| | Prédit Normal | Prédit Défaut |
+|---|---|---|
+| **Réel Normal** | 14 ✅ | 8 |
+| **Réel Défaut** | 3 | 85 ✅ |
+
+### Validation du modèle (3 tests)
+
+- ✅ **Anti-fuite** : 0 chevauchement train/test — évaluation 100% honnête
+- ✅ **Robustesse** : image aléatoire score 2x supérieur aux pièces normales
+- ✅ **Sémantique** : AUC varie par type de défaut (0.936 → 0.992) — le modèle capte la nature de chaque défaut
 
 ---
 
@@ -149,25 +186,52 @@ cd PFE-Detection-Anomalies-3D
 pip install -r requirements.txt
 ```
 
+### Utilisation sur Google Colab
+
+```python
+# 1. Monter le Drive
+from google.colab import drive
+drive.mount('/content/drive')
+
+# 2. Extraire le dataset
+import subprocess
+subprocess.run(['tar', '-xf',
+    '/content/drive/MyDrive/Detection_Anomalie_3D/mvtec_3d_anomaly_detection.tar.xz',
+    '-C', '/content/mvtec3d'])
+
+# 3. Ouvrir le notebook de la phase souhaitée
+```
+
 ---
 
-## 📈 Métriques cibles
+## 📦 Dépendances principales
 
-| Métrique | Objectif |
-|----------|----------|
-| AUC-ROC | > 0.85 |
-| F1-Score | > 0.80 |
-| Précision | > 0.80 |
-| Rappel | > 0.80 |
-| IoU | > 0.60 |
+```
+torch >= 2.0.0
+torchvision >= 0.15.0
+open3d >= 0.18.0
+tifffile >= 2023.7.0
+numpy >= 1.24.0
+scikit-learn >= 1.3.0
+matplotlib >= 3.7.0
+plotly >= 5.15.0
+Pillow >= 10.0.0
+```
 
 ---
 
-## 📚 Références
+## 📚 Références scientifiques
 
 - Bergmann et al. — *The MVTec 3D-AD Dataset for Unsupervised 3D Anomaly Detection* (VISAPP 2022)
+- Horwitz & Hoshen — *Back to the Feature: Classical 3D Features are (Almost) All You Need for 3D Anomaly Detection* (CVPR 2023)
 - Qi et al. — *PointNet: Deep Learning on Point Sets for 3D Classification* (CVPR 2017)
-- Qi et al. — *PointNet++: Deep Hierarchical Feature Learning on Point Sets* (NeurIPS 2017)
+- Roth et al. — *Towards Total Recall in Industrial Anomaly Detection (PatchCore)* (CVPR 2022)
+
+---
+
+## 📄 Licence
+
+Ce projet est sous licence MIT — voir [LICENSE](LICENSE).
 
 ---
 
